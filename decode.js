@@ -33,6 +33,7 @@ Packet.PUBLIC_KEY_ALGORITHMS = {
     19: "Reserved for ECDSA",
     20: "Reserved (formerly Elgamal Encrypt or Sign)",
     21: "Reserved for Diffie-Hellman (X9.42, as defined for IETF-S/MIME)",
+    35: "GOST R 34.10-2012",
 };
 
 Packet.SYMMETRIC_KEY_ALGORITHMS = {
@@ -64,6 +65,7 @@ Packet.HASH_ALGORITHMS = {
     9: "SHA384",
     10: "SHA512",
     11: "SHA224",
+    12: "GOST R 34.11-2012 (Stribog)",
 };
 
 Packet.SIGNATURE_TYPES = {
@@ -117,6 +119,8 @@ Packet.SIGNATURE_SUBPACKET_TYPES = {
     30: "Features",
     31: "Signature Target",
     32: "Embedded Signature",
+    33: "Issuer Fingerprint",
+    34: "Preferred AEAD Algorithms",
 };
 
 Packet.KEYSERVER_PREFERENCES = {
@@ -365,7 +369,12 @@ Packet.prototype = {
             }
 
             this.set('signedHashValuePrefix', this.stream.hex(2));
-            this.set('signature', this.stream.multiPrecisionInteger());
+            if (this["publicKeyAlgorithm"].id === 35) {
+                this.set("signature_r", this.stream.multiPrecisionInteger());
+                this.set("signature_s", this.stream.multiPrecisionInteger());
+            } else {
+                this.set("signature", this.stream.multiPrecisionInteger());
+            }
 
         } else {
             this.parseError('Unsupported version', this.version);
@@ -427,6 +436,15 @@ Packet.prototype = {
                 }.bind(this))) {
                     this.parseError("Unhanded sub-signature data");
                 }
+                break;
+            
+            case 33:
+                this.setSubpacket(subpacket, 'version', this.stream.octet());
+                this.setSubpacket(
+                  subpacket,
+                  'IssuerFingerprint',
+                  this.stream.hex(subpacket.length - 2)
+                );
                 break;
 
             default:
