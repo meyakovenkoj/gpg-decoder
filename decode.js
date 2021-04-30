@@ -33,6 +33,7 @@ Packet.PUBLIC_KEY_ALGORITHMS = {
     19: "Reserved for ECDSA",
     20: "Reserved (formerly Elgamal Encrypt or Sign)",
     21: "Reserved for Diffie-Hellman (X9.42, as defined for IETF-S/MIME)",
+    22: "ECC Ed25519",
     35: "GOST R 34.10-2012",
 };
 
@@ -147,6 +148,14 @@ Packet.STRING_TO_KEY_SPECIFIERS = {
     2: "Reserved value",
     3: "Iterated and Salted S2K"
 };
+
+var ellipsis = "\u2026";
+
+function stringCut(str, len) {
+    if (str.length > len)
+        str = str.substring(0, len) + ellipsis;
+    return str;
+}
 
 
 
@@ -472,6 +481,24 @@ Packet.prototype = {
             if (this.algorithm.id === 1) {
                 this.set('n', this.stream.multiPrecisionInteger());
                 this.set('e', this.stream.multiPrecisionInteger());
+            }
+            else if (this.algorithm.id === 35) {
+                this.set('p', this.stream.multiPrecisionInteger());
+                this.set('a', this.stream.multiPrecisionInteger());
+                this.set('b', this.stream.multiPrecisionInteger());
+                this.set('g_x', this.stream.multiPrecisionInteger());
+                this.set('g_y', this.stream.multiPrecisionInteger());
+                this.set('h', this.stream.multiPrecisionInteger());
+                this.set('n', this.stream.multiPrecisionInteger());
+                this.set('q_x', this.stream.multiPrecisionInteger());
+                this.set('q_y', this.stream.multiPrecisionInteger());
+                this.set('coef', this.stream.multiPrecisionInteger());
+            }
+            else if (this.algorithm.id === 22) {
+                var length = this.stream.variableLengthLength();
+                var oid_str = parse_oid(this.stream.hex(length), 0, length, 1000);
+                this.set('OID', oid_str);
+                this.set('q', this.stream.multiPrecisionInteger());
             } else {
                 this.parseError("Unsupported algorithm", this.algorithm);
             }
@@ -601,3 +628,43 @@ function hover(spans) {
         span.className = 'hovered';
     }
 }
+
+function parse_oid(oid, start, end, maxLength) {
+        var s = '',
+            n = new int10(),
+            bits = 0;
+        var bytes = Hex.decode(oid);
+        for (var i = start; i < end; ++i) {
+            var v = bytes[i];
+            n.mulAdd(128, v & 0x7F);
+            bits += 7;
+            if (!(v & 0x80)) { // finished
+                if (s === '') {
+                    n = n.simplify();
+                    if (n instanceof int10) {
+                        n.sub(80);
+                        s = "2." + n.toString();
+                    } else {
+                        var m = n < 80 ? n < 40 ? 0 : 1 : 2;
+                        s = m + "." + (n - m * 40);
+                    }
+                } else
+                    s += "." + n.toString();
+                if (s.length > maxLength)
+                    return stringCut(s, maxLength);
+                n = new int10();
+                bits = 0;
+            }
+        }
+        if (bits > 0)
+            s += ".incomplete";
+        if (typeof oids === 'object') {
+            var oid = oids[s];
+            if (oid) {
+                if (oid.d) s += " " + oid.d;
+                if (oid.c) s += " " + oid.c;
+                if (oid.w) s += " (warning!)";
+            }
+        }
+        return s;
+    };
