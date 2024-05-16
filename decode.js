@@ -594,7 +594,8 @@ function decode(text) {
 
     this.location.hash = text;
 
-    text = text.split("\n\n")[1].split("\n=")[0].replace(/\n/g, "");
+    var no_leading = text.split("\n\n");
+    text = no_leading[no_leading.length - 1].split("\n=")[0].replace(/\n/g, "");
 
     var bytes = Base64.decode(text);
     window.bytes = bytes;
